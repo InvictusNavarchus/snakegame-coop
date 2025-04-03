@@ -24,8 +24,6 @@
   },
   "type": "module",
   "dependencies": {
-    "peerjs": "^1.5.1",
-    "uuid": "^9.0.1",
     "nanoid": "^5.0.4"
   }
 }

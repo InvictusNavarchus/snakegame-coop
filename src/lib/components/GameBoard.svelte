@@ -9,6 +9,7 @@
   export let cellSize: number = 20;
   export let onUpdate: (gameState: GameState) => void;
   export let onDirectionChange: (direction: Direction) => void;
+  export let gameActive: boolean = false; // New prop to control when game should start
   
   let canvas: HTMLCanvasElement;
   let ctx: CanvasRenderingContext2D;
@@ -18,16 +19,29 @@
   $: canvasWidth = gameState.gridSize.width * cellSize;
   $: canvasHeight = gameState.gridSize.height * cellSize;
   
+  // Watch for changes to gameActive and start/stop the game loop accordingly
+  $: if (ctx && gameActive !== undefined) {
+    if (gameActive) {
+      startGameLoop();
+    } else if (gameLoopInterval) {
+      logger.info('game', 'Stopping game loop as game is not active');
+      clearInterval(gameLoopInterval);
+      gameLoopInterval = undefined;
+    }
+  }
+  
   onMount(() => {
     logger.info('render', 'GameBoard mounted, initializing canvas and controls');
     ctx = canvas.getContext('2d')!;
     setupKeyboardControls();
     setupTouchControls();
-    startGameLoop();
+    
+    // Only start rendering, don't start the game loop yet
+    requestAnimationFrame(render);
     
     return () => {
       logger.info('render', 'Clearing game loop interval on component cleanup');
-      clearInterval(gameLoopInterval);
+      if (gameLoopInterval) clearInterval(gameLoopInterval);
     };
   });
   
@@ -46,7 +60,7 @@
     
     logger.info('game', 'Starting game loop');
     gameLoopInterval = setInterval(() => {
-      if (!gameState.gameOver && !gameState.isPaused) {
+      if (!gameState.gameOver && !gameState.isPaused && gameActive) {
         logger.debug('game', 'Updating game state');
         const updatedState = updateGame(gameState);
         onUpdate(updatedState);
@@ -99,10 +113,15 @@
       drawSnake(snake.body, snake.color, snake.alive);
     }
     
-    // Draw game over overlay
-    if (gameState.gameOver) {
+    // Draw game over overlay only if game was actually active
+    if (gameState.gameOver && gameActive) {
       logger.info('game', 'Game over, drawing overlay');
       drawGameOverOverlay();
+    }
+    
+    // If not active yet, request next animation frame for rendering
+    if (!gameActive && !gameLoopInterval) {
+      requestAnimationFrame(render);
     }
   }
   
@@ -368,6 +387,12 @@
     on:restart
     on:pause
   ></canvas>
+  
+  {#if !gameActive}
+    <div class="game-waiting-overlay">
+      <p>Create or join a game to start playing</p>
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -382,5 +407,21 @@
   
   canvas {
     display: block;
+  }
+  
+  .game-waiting-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(0, 0, 0, 0.7);
+    color: white;
+    font-size: 18px;
+    text-align: center;
+    padding: 20px;
   }
 </style>

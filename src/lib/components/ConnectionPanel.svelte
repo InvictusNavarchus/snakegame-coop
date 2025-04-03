@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, createEventDispatcher } from 'svelte';
   import { 
     initializePeer, 
     connectToPeer, 
@@ -14,6 +14,14 @@
   let inviteCode = '';
   let copied = false;
   let connecting = false;
+  
+  // Create a dispatcher to emit events to parent components
+  const dispatch = createEventDispatcher();
+  
+  $: if ($connectionStatus === 'connected') {
+    // Dispatch event when connection status changes to connected
+    dispatch('gameReady', { ready: true });
+  }
   
   onMount(() => {
     // Just log when component is mounted, but don't auto-create game

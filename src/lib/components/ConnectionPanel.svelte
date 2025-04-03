@@ -17,6 +17,7 @@
   let copied = false;
   let connecting = false;
   let connectionErrorDetails = '';
+  let isHost = false;  // Add this variable to track if current player is a host
   
   // Create a dispatcher to emit events to parent components
   const dispatch = createEventDispatcher();
@@ -36,6 +37,7 @@
     logger.info('network', 'Creating new game session as host');
     try {
       const id = await initializeHost();
+      isHost = true;  // Set the host status when successfully hosting a game
       logger.info('network', `Game hosted with ID: ${id}`);
     } catch (err) {
       logger.error('network', 'Failed to host game:', err);
@@ -106,7 +108,7 @@
 </script>
 
 <div class="connection-panel">
-  {#if $connectionStatus === 'connected' && $localIpAddress && $playerInfo?.isHost}
+  {#if $connectionStatus === 'connected' && $localIpAddress && isHost}
     <div class="connected-container">
       <h3>Game Hosted Successfully</h3>
       <p>Share your IP address with friends to play together:</p>

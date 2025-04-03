@@ -14,6 +14,7 @@
   let inviteCode = '';
   let copied = false;
   let connecting = false;
+  let connectionErrorDetails = '';
   
   // Create a dispatcher to emit events to parent components
   const dispatch = createEventDispatcher();
@@ -43,6 +44,27 @@
     }
   }
   
+  function getConnectionErrorMessage(error: Error): string {
+    const errorMsg = error.message || String(error);
+    
+    if (errorMsg.includes('ICE failed') || errorMsg.includes('Negotiation of connection failed')) {
+      return `Connection failed due to network restrictions. This typically happens when:
+      - One or both players are behind restrictive firewalls or NATs
+      - Corporate networks or public WiFi that block peer-to-peer connections
+      
+      Try the following:
+      - Connect using a different network (mobile hotspot often works)
+      - Disable any VPN services
+      - Try a different browser (Chrome works best)`;
+    }
+    
+    if (errorMsg.includes('connect_error') || errorMsg.includes('Could not connect to peer')) {
+      return `Could not connect to the game session. The invite code may be incorrect or the host may have disconnected.`;
+    }
+    
+    return errorMsg;
+  }
+  
   async function handleJoinGame() {
     if (!inviteCode.trim()) {
       logger.warn('network', 'Join game attempted with empty invite code');
@@ -50,6 +72,7 @@
     }
     
     connecting = true;
+    connectionErrorDetails = '';
     logger.info('network', `Attempting to join game with code: ${inviteCode.trim()}`);
     try {
       await connectToPeer(inviteCode.trim());
@@ -57,6 +80,8 @@
     } catch (err) {
       logger.error('network', 'Failed to join game:', err);
       console.error('Failed to join game:', err);
+      // Set more detailed error message
+      connectionErrorDetails = getConnectionErrorMessage(err);
     } finally {
       connecting = false;
     }
@@ -151,9 +176,10 @@
         </div>
       </div>
       
-      {#if $peerError}
+      {#if $peerError || connectionErrorDetails}
         <div class="error-message">
-          Error: {$peerError}
+          <h4>Connection Error</h4>
+          <p>{connectionErrorDetails || $peerError}</p>
         </div>
       {/if}
     </div>
@@ -345,6 +371,14 @@
     border-left: 4px solid #ff3b30;
     border-radius: 4px;
     color: #ff3b30;
+    white-space: pre-line;
+    line-height: 1.5;
+  }
+  
+  .error-message h4 {
+    color: #ff3b30;
+    margin-top: 0;
+    margin-bottom: 8px;
   }
   
   @media (max-width: 600px) {

@@ -9,6 +9,7 @@
     peerError, 
     gameInviteCode 
   } from '$lib/network/peerConnection';
+  import { logger } from '$lib/utils/logger';
   
   let inviteCode = '';
   let copied = false;
@@ -16,15 +17,19 @@
   
   onMount(() => {
     // Auto-initialize peer on mount
+    logger.info('network', 'ConnectionPanel mounted, auto-initializing peer');
     handleCreateGame();
   });
   
   async function handleCreateGame() {
     connecting = true;
+    logger.info('network', 'Creating new game session');
     try {
       const id = await initializePeer();
       gameInviteCode.set(id);
+      logger.info('network', `Game created with invite code: ${id}`);
     } catch (err) {
+      logger.error('network', 'Failed to create game:', err);
       console.error('Failed to create game:', err);
     } finally {
       connecting = false;
@@ -32,12 +37,18 @@
   }
   
   async function handleJoinGame() {
-    if (!inviteCode.trim()) return;
+    if (!inviteCode.trim()) {
+      logger.warn('network', 'Join game attempted with empty invite code');
+      return;
+    }
     
     connecting = true;
+    logger.info('network', `Attempting to join game with code: ${inviteCode.trim()}`);
     try {
       await connectToPeer(inviteCode.trim());
+      logger.info('network', 'Successfully connected to peer');
     } catch (err) {
+      logger.error('network', 'Failed to join game:', err);
       console.error('Failed to join game:', err);
     } finally {
       connecting = false;
@@ -45,16 +56,22 @@
   }
   
   function copyInviteCode() {
-    if (!$gameInviteCode) return;
+    if (!$gameInviteCode) {
+      logger.warn('network', 'Attempted to copy empty invite code');
+      return;
+    }
     
+    logger.debug('network', 'Copying invite code to clipboard');
     navigator.clipboard.writeText($gameInviteCode)
       .then(() => {
         copied = true;
+        logger.debug('network', 'Invite code copied successfully');
         setTimeout(() => {
           copied = false;
         }, 2000);
       })
       .catch(err => {
+        logger.error('network', 'Failed to copy invite code:', err);
         console.error('Failed to copy:', err);
       });
   }

@@ -3,6 +3,7 @@
   import { Direction, type GameState, type Position } from '$lib/game/types';
   import { updateGame } from '$lib/game/gameLogic';
   import { playerId } from '$lib/network/peerConnection';
+  import { logger } from '$lib/utils/logger';
   
   export let gameState: GameState;
   export let cellSize: number = 20;
@@ -18,29 +19,35 @@
   $: canvasHeight = gameState.gridSize.height * cellSize;
   
   onMount(() => {
+    logger.info('render', 'GameBoard mounted, initializing canvas and controls');
     ctx = canvas.getContext('2d')!;
     setupKeyboardControls();
     setupTouchControls();
     startGameLoop();
     
     return () => {
+      logger.info('render', 'Clearing game loop interval on component cleanup');
       clearInterval(gameLoopInterval);
     };
   });
   
   onDestroy(() => {
     if (gameLoopInterval) {
+      logger.info('render', 'GameBoard destroyed, cleaning up resources');
       clearInterval(gameLoopInterval);
     }
   });
   
   function startGameLoop() {
     if (gameLoopInterval) {
+      logger.debug('game', 'Clearing existing game loop before starting new one');
       clearInterval(gameLoopInterval);
     }
     
+    logger.info('game', 'Starting game loop');
     gameLoopInterval = setInterval(() => {
       if (!gameState.gameOver && !gameState.isPaused) {
+        logger.debug('game', 'Updating game state');
         const updatedState = updateGame(gameState);
         onUpdate(updatedState);
       }
@@ -49,7 +56,10 @@
   }
   
   function render() {
-    if (!ctx) return;
+    if (!ctx) {
+      logger.warn('render', 'Render called but canvas context is not available');
+      return;
+    }
     
     // Clear canvas
     ctx.clearRect(0, 0, canvasWidth, canvasHeight);
@@ -85,11 +95,13 @@
     
     // Draw snakes
     for (const snake of gameState.snakes) {
+      logger.debug('render', `Drawing snake ${snake.id}, alive: ${snake.alive}, length: ${snake.body.length}`);
       drawSnake(snake.body, snake.color, snake.alive);
     }
     
     // Draw game over overlay
     if (gameState.gameOver) {
+      logger.info('game', 'Game over, drawing overlay');
       drawGameOverOverlay();
     }
   }
@@ -242,62 +254,73 @@
   }
   
   function setupKeyboardControls() {
+    logger.info('input', 'Setting up keyboard controls');
     window.addEventListener('keydown', (e) => {
       if (gameState.gameOver || gameState.isPaused) {
         if (e.code === 'Space') {
+          logger.info('input', 'Space pressed during game over/pause, triggering restart');
           const event = new CustomEvent('restart');
           canvas.dispatchEvent(event);
         }
         return;
       }
       
+      let direction: Direction | null = null;
+      
       switch (e.code) {
         case 'ArrowUp':
         case 'KeyW':
-          onDirectionChange(Direction.UP);
-          e.preventDefault();
+          direction = Direction.UP;
           break;
         case 'ArrowDown':
         case 'KeyS':
-          onDirectionChange(Direction.DOWN);
-          e.preventDefault();
+          direction = Direction.DOWN;
           break;
         case 'ArrowLeft':
         case 'KeyA':
-          onDirectionChange(Direction.LEFT);
-          e.preventDefault();
+          direction = Direction.LEFT;
           break;
         case 'ArrowRight':
         case 'KeyD':
-          onDirectionChange(Direction.RIGHT);
-          e.preventDefault();
+          direction = Direction.RIGHT;
           break;
         case 'Space':
           if (gameState.gameOver) {
+            logger.info('input', 'Space pressed, requesting game restart');
             const event = new CustomEvent('restart');
             canvas.dispatchEvent(event);
           } else {
+            logger.info('input', 'Space pressed, toggling pause state');
             const event = new CustomEvent('pause');
             canvas.dispatchEvent(event);
           }
           e.preventDefault();
           break;
       }
+      
+      if (direction !== null) {
+        logger.debug('input', `Direction change: ${Direction[direction]}`);
+        onDirectionChange(direction);
+        e.preventDefault();
+      }
     });
   }
   
   function setupTouchControls() {
+    logger.info('input', 'Setting up touch controls');
     let touchStartX = 0;
     let touchStartY = 0;
     
     canvas.addEventListener('touchstart', (e) => {
       touchStartX = e.touches[0].clientX;
       touchStartY = e.touches[0].clientY;
+      logger.debug('input', `Touch start at x:${touchStartX}, y:${touchStartY}`);
       e.preventDefault();
     }, { passive: false });
     
     canvas.addEventListener('touchend', (e) => {
       if (gameState.gameOver) {
+        logger.info('input', 'Touch end during game over, requesting restart');
         const event = new CustomEvent('restart');
         canvas.dispatchEvent(event);
         return;
@@ -309,19 +332,25 @@
       const dx = touchEndX - touchStartX;
       const dy = touchEndY - touchStartY;
       
+      logger.debug('input', `Touch end at x:${touchEndX}, y:${touchEndY}, dx:${dx}, dy:${dy}`);
+      
       // Determine swipe direction
       if (Math.abs(dx) > Math.abs(dy)) {
         // Horizontal swipe
         if (dx > 0) {
+          logger.debug('input', 'Swipe RIGHT detected');
           onDirectionChange(Direction.RIGHT);
         } else {
+          logger.debug('input', 'Swipe LEFT detected');
           onDirectionChange(Direction.LEFT);
         }
       } else {
         // Vertical swipe
         if (dy > 0) {
+          logger.debug('input', 'Swipe DOWN detected');
           onDirectionChange(Direction.DOWN);
         } else {
+          logger.debug('input', 'Swipe UP detected');
           onDirectionChange(Direction.UP);
         }
       }

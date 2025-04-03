@@ -1,14 +1,18 @@
 <script lang="ts">
+  import { logger } from '$lib/utils/logger';
+  
   export let onPause: () => void;
   export let onRestart: () => void;
   export let isPaused: boolean;
   export let gameOver: boolean;
   
   function handlePauseClick() {
+    logger.info('input', `Game ${isPaused ? 'resumed' : 'paused'} via control button`);
     onPause();
   }
   
   function handleRestartClick() {
+    logger.info('input', 'Game restart requested via control button');
     onRestart();
   }
 </script>

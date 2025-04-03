@@ -1,3 +1,4 @@
+/* src/app.css */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -5,12 +6,14 @@
 :root {
   --color-bg: #121212;
   --color-text: #ffffff;
-  --color-primary: #00c853;
-  --color-secondary: #304ffe;
-  --color-accent: #ff3d00;
-  --color-snake1: #00c853;
-  --color-snake2: #304ffe;
-  --color-food: #ff3d00;
+  --color-primary: #00c853; /* Green */
+  --color-secondary: #304ffe; /* Blue */
+  --color-accent: #ff3d00; /* Red/Orange */
+  --color-snake1: var(--color-primary); /* Host */
+  --color-snake2: var(--color-secondary); /* Player 2 */
+  --color-snake3: #ffab00; /* Amber - Player 3 */
+  --color-snake4: #d500f9; /* Purple - Player 4 */
+  --color-food: var(--color-accent);
   --game-border-radius: 10px;
 }
 

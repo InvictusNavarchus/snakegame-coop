@@ -130,7 +130,7 @@
 
       <div class="invite-code-container">
         <div class="invite-code">
-          Your IP: <span class="ip-placeholder">[Your Local/VPN IP]</span> Port: <span class="port-value">{$hostPortInput || 8080}</span>
+          Your IP: <span class="ip-placeholder">[Your Local/VPN IP]</span> Port: <span class="port-value">{hostPortInput || 8080}</span>
         </div>
         <button class="copy-button" on:click={copyIpAddress} title="Show instructions to find IP">
           How to find IP?

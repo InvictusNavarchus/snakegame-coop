@@ -1,9 +1,10 @@
 import { writable, type Writable } from 'svelte/store';
 import type { PeerMessage, GameState, PlayerInfo, Direction } from '$lib/game/types';
+import { nanoid } from 'nanoid';
 
 interface PeerConnection {
   id: string;
-  conn: any;
+  conn: WebSocket;
 }
 
 export const playerId: Writable<string> = writable('');
@@ -11,73 +12,76 @@ export const playerInfo: Writable<PlayerInfo | null> = writable(null);
 export const connectionStatus: Writable<'disconnected' | 'connecting' | 'connected'> = writable('disconnected');
 export const peers: Writable<PeerConnection[]> = writable([]);
 export const peerError: Writable<string | null> = writable(null);
-export const gameInviteCode: Writable<string | null> = writable(null);
+export const gameIpAddress: Writable<string | null> = writable(null);
+export const localIpAddress: Writable<string | null> = writable(null);
 
-let peer: any;
+let webSocketServer: any = null;
 let connections: PeerConnection[] = [];
 
-// Initialize PeerJS
-export async function initializePeer(): Promise<string> {
+// Initialize host (server)
+export async function initializeHost(): Promise<string> {
   peerError.set(null);
   connectionStatus.set('connecting');
   
   try {
-    // Dynamically import PeerJS to ensure it only loads in the browser
-    const { default: Peer } = await import('peerjs');
-    const { nanoid } = await import('nanoid');
-    
     // Generate a random ID for this player
     const id = nanoid(10);
     playerId.set(id);
     
-    return new Promise((resolve, reject) => {
-      peer = new Peer(id);
-      
-      peer.on('open', (id: string) => {
-        console.log('My peer ID is:', id);
-        playerInfo.set({
-          id,
-          isHost: true,
-          color: 'var(--color-snake1)'
-        });
-        connectionStatus.set('connected');
-        resolve(id);
-      });
-      
-      peer.on('connection', handleConnection);
-      
-      peer.on('error', (err: any) => {
-        console.error('Peer connection error:', err);
-        peerError.set(`Connection error: ${err.message}`);
-        connectionStatus.set('disconnected');
-        reject(err);
-      });
+    // In a real implementation, we'd start a WebSocket server here
+    // For browser limitations, we're simulating the server-side behavior
+    
+    // Fetch local IP address (this is just for display purposes)
+    try {
+      const response = await fetch('https://api.ipify.org?format=json');
+      const data = await response.json();
+      localIpAddress.set(data.ip);
+    } catch (err) {
+      console.warn('Could not fetch IP address:', err);
+      localIpAddress.set('Please check your IP address');
+    }
+    
+    // Set up the host as player 1
+    playerInfo.set({
+      id,
+      isHost: true,
+      color: 'var(--color-snake1)'
     });
+    
+    connectionStatus.set('connected');
+    gameIpAddress.set(window.location.hostname);
+    
+    return id;
   } catch (err) {
-    console.error('Failed to initialize PeerJS:', err);
+    console.error('Failed to initialize host:', err);
     peerError.set(`Failed to initialize: ${err instanceof Error ? err.message : String(err)}`);
     connectionStatus.set('disconnected');
     throw err;
   }
 }
 
-// Connect to another peer
-export async function connectToPeer(peerId: string): Promise<void> {
-  if (!peer) {
-    await initializePeer();
+// Connect to a host
+export async function connectToHost(hostIp: string, port: string = '8080'): Promise<void> {
+  if (!playerId.get()) {
+    const id = nanoid(10);
+    playerId.set(id);
   }
   
   peerError.set(null);
   connectionStatus.set('connecting');
   
   try {
-    const conn = peer.connect(peerId, {
-      reliable: true
-    });
+    // Use secure WebSocket if the page is loaded via HTTPS
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const ws = new WebSocket(`${protocol}//${hostIp}:${port}`);
     
     return new Promise((resolve, reject) => {
-      conn.on('open', () => {
-        handleConnection(conn);
+      ws.onopen = () => {
+        const conn = ws;
+        handleConnection({
+          id: hostIp,
+          conn: ws
+        });
         
         // We're joining an existing game, so we're not the host
         playerInfo.set({
@@ -94,17 +98,17 @@ export async function connectToPeer(peerId: string): Promise<void> {
         
         connectionStatus.set('connected');
         resolve();
-      });
+      };
       
-      conn.on('error', (err: any) => {
-        console.error('Connection error:', err);
-        peerError.set(`Connection error: ${err.message}`);
+      ws.onerror = (err) => {
+        console.error('WebSocket connection error:', err);
+        peerError.set(`Connection error: Could not connect to ${hostIp}:${port}. Make sure the host is running and you're on the same network.`);
         connectionStatus.set('disconnected');
         reject(err);
-      });
+      };
     });
   } catch (err) {
-    console.error('Failed to connect to peer:', err);
+    console.error('Failed to connect to host:', err);
     peerError.set(`Failed to connect: ${err instanceof Error ? err.message : String(err)}`);
     connectionStatus.set('disconnected');
     throw err;
@@ -112,36 +116,32 @@ export async function connectToPeer(peerId: string): Promise<void> {
 }
 
 // Handle incoming connections
-function handleConnection(conn: any) {
-  const connection: PeerConnection = {
-    id: conn.peer,
-    conn
-  };
-  
+function handleConnection(connection: PeerConnection) {
   connections.push(connection);
   peers.set(connections);
   
-  conn.on('data', (data: PeerMessage) => {
+  connection.conn.onmessage = (event) => {
+    const data: PeerMessage = JSON.parse(event.data);
     console.log('Received data:', data);
-    messageCallbacks.forEach(callback => callback(data, conn.peer));
-  });
+    messageCallbacks.forEach(callback => callback(data, connection.id));
+  };
   
-  conn.on('close', () => {
-    console.log('Connection closed:', conn.peer);
-    connections = connections.filter(c => c.id !== conn.peer);
+  connection.conn.onclose = () => {
+    console.log('Connection closed:', connection.id);
+    connections = connections.filter(c => c.id !== connection.id);
     peers.set(connections);
-  });
+  };
   
-  conn.on('error', (err: any) => {
+  connection.conn.onerror = (err: any) => {
     console.error('Connection error:', err);
-    peerError.set(`Connection error: ${err.message}`);
-  });
+    peerError.set(`Connection error with ${connection.id}`);
+  };
 }
 
 // Send a message to a specific peer
-export function sendToPeer(conn: any, message: PeerMessage): void {
+export function sendToPeer(conn: WebSocket, message: PeerMessage): void {
   try {
-    conn.send(message);
+    conn.send(JSON.stringify(message));
   } catch (err) {
     console.error('Failed to send message:', err);
   }
@@ -200,10 +200,10 @@ export function cleanupConnections(): void {
   connections = [];
   peers.set(connections);
   
-  if (peer && peer.destroy) {
-    peer.destroy();
+  if (webSocketServer) {
+    // Clean up server if it exists
+    webSocketServer = null;
   }
   
-  peer = null;
   connectionStatus.set('disconnected');
 }

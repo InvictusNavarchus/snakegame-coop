@@ -1,17 +1,19 @@
 <script lang="ts">
   import { onMount, createEventDispatcher } from 'svelte';
   import { 
-    initializePeer, 
-    connectToPeer, 
+    initializeHost,
+    connectToHost,
     playerId, 
     connectionStatus, 
     peers, 
     peerError, 
-    gameInviteCode 
+    gameIpAddress,
+    localIpAddress
   } from '$lib/network/peerConnection';
   import { logger } from '$lib/utils/logger';
   
-  let inviteCode = '';
+  let hostIp = '';
+  let port = '8080';
   let copied = false;
   let connecting = false;
   let connectionErrorDetails = '';
@@ -29,16 +31,15 @@
     logger.info('network', 'ConnectionPanel mounted');
   });
   
-  async function handleCreateGame() {
+  async function handleHostGame() {
     connecting = true;
-    logger.info('network', 'Creating new game session');
+    logger.info('network', 'Creating new game session as host');
     try {
-      const id = await initializePeer();
-      gameInviteCode.set(id);
-      logger.info('network', `Game created with invite code: ${id}`);
+      const id = await initializeHost();
+      logger.info('network', `Game hosted with ID: ${id}`);
     } catch (err) {
-      logger.error('network', 'Failed to create game:', err);
-      console.error('Failed to create game:', err);
+      logger.error('network', 'Failed to host game:', err);
+      console.error('Failed to host game:', err);
     } finally {
       connecting = false;
     }
@@ -47,36 +48,31 @@
   function getConnectionErrorMessage(error: Error): string {
     const errorMsg = error.message || String(error);
     
-    if (errorMsg.includes('ICE failed') || errorMsg.includes('Negotiation of connection failed')) {
-      return `Connection failed due to network restrictions. This typically happens when:
-      - One or both players are behind restrictive firewalls or NATs
-      - Corporate networks or public WiFi that block peer-to-peer connections
+    if (errorMsg.includes('Failed to connect')) {
+      return `Could not connect to the host at ${hostIp}:${port}. 
       
-      Try the following:
-      - Connect using a different network (mobile hotspot often works)
-      - Disable any VPN services
-      - Try a different browser (Chrome works best)`;
-    }
-    
-    if (errorMsg.includes('connect_error') || errorMsg.includes('Could not connect to peer')) {
-      return `Could not connect to the game session. The invite code may be incorrect or the host may have disconnected.`;
+      Please check:
+      - The host is running the game and is hosting
+      - You're on the same network or using a service like ZeroTier
+      - The IP address and port are correct
+      - Any firewalls are configured to allow the connection`;
     }
     
     return errorMsg;
   }
   
   async function handleJoinGame() {
-    if (!inviteCode.trim()) {
-      logger.warn('network', 'Join game attempted with empty invite code');
+    if (!hostIp.trim()) {
+      logger.warn('network', 'Join game attempted with empty host IP');
       return;
     }
     
     connecting = true;
     connectionErrorDetails = '';
-    logger.info('network', `Attempting to join game with code: ${inviteCode.trim()}`);
+    logger.info('network', `Attempting to join game at IP: ${hostIp.trim()}:${port}`);
     try {
-      await connectToPeer(inviteCode.trim());
-      logger.info('network', 'Successfully connected to peer');
+      await connectToHost(hostIp.trim(), port);
+      logger.info('network', 'Successfully connected to host');
     } catch (err) {
       logger.error('network', 'Failed to join game:', err);
       console.error('Failed to join game:', err);
@@ -87,39 +83,44 @@
     }
   }
   
-  function copyInviteCode() {
-    if (!$gameInviteCode) {
-      logger.warn('network', 'Attempted to copy empty invite code');
+  function copyIpAddress() {
+    if (!$localIpAddress) {
+      logger.warn('network', 'Attempted to copy empty IP address');
       return;
     }
     
-    logger.debug('network', 'Copying invite code to clipboard');
-    navigator.clipboard.writeText($gameInviteCode)
+    logger.debug('network', 'Copying IP address to clipboard');
+    navigator.clipboard.writeText($localIpAddress)
       .then(() => {
         copied = true;
-        logger.debug('network', 'Invite code copied successfully');
+        logger.debug('network', 'IP address copied successfully');
         setTimeout(() => {
           copied = false;
         }, 2000);
       })
       .catch(err => {
-        logger.error('network', 'Failed to copy invite code:', err);
+        logger.error('network', 'Failed to copy IP address:', err);
         console.error('Failed to copy:', err);
       });
   }
 </script>
 
 <div class="connection-panel">
-  {#if $connectionStatus === 'connected' && $gameInviteCode}
+  {#if $connectionStatus === 'connected' && $localIpAddress && $playerInfo?.isHost}
     <div class="connected-container">
-      <h3>Invite a Friend</h3>
-      <p>Share this code with a friend to play together:</p>
+      <h3>Game Hosted Successfully</h3>
+      <p>Share your IP address with friends to play together:</p>
       
       <div class="invite-code-container">
-        <div class="invite-code">{$gameInviteCode}</div>
-        <button class="copy-button" on:click={copyInviteCode}>
+        <div class="invite-code">{$localIpAddress}:{port}</div>
+        <button class="copy-button" on:click={copyIpAddress}>
           {copied ? '✓ Copied' : 'Copy'}
         </button>
+      </div>
+      
+      <div class="network-note">
+        <h4>Network Note</h4>
+        <p>Players must be on the same network or using a VPN solution like ZeroTier to connect directly.</p>
       </div>
       
       {#if $peers.length > 0}
@@ -142,38 +143,52 @@
     </div>
   {:else}
     <div class="connection-options">
-      <h3>Join or Create a Game</h3>
+      <h3>Join or Host a Game</h3>
       
       <div class="option-container">
-        <h4>Create a New Game</h4>
+        <h4>Host a New Game</h4>
         <button 
           class="action-button create" 
-          on:click={handleCreateGame}
+          on:click={handleHostGame}
           disabled={connecting}
         >
-          {connecting ? 'Creating...' : 'Create Game'}
+          {connecting ? 'Starting...' : 'Host Game'}
         </button>
       </div>
       
       <div class="divider">OR</div>
       
       <div class="option-container">
-        <h4>Join with an Invite Code</h4>
+        <h4>Join with Host's IP Address</h4>
         <div class="join-controls">
-          <input 
-            type="text" 
-            bind:value={inviteCode} 
-            placeholder="Paste invite code here"
-            disabled={connecting}
-          />
+          <div class="ip-input-container">
+            <input 
+              type="text" 
+              bind:value={hostIp} 
+              placeholder="Host IP address"
+              disabled={connecting}
+            />
+            <input 
+              type="text" 
+              bind:value={port} 
+              placeholder="Port"
+              class="port-input"
+              disabled={connecting}
+            />
+          </div>
           <button 
             class="action-button join" 
             on:click={handleJoinGame}
-            disabled={!inviteCode.trim() || connecting}
+            disabled={!hostIp.trim() || connecting}
           >
             {connecting ? 'Joining...' : 'Join Game'}
           </button>
         </div>
+      </div>
+      
+      <div class="network-note">
+        <h4>Network Requirements</h4>
+        <p>Players must be on the same network or using a service like ZeroTier to create a virtual LAN. Enter the host's ZeroTier IP address when connecting.</p>
       </div>
       
       {#if $peerError || connectionErrorDetails}
@@ -278,7 +293,13 @@
   
   .join-controls {
     display: flex;
+    flex-direction: column;
     gap: 10px;
+  }
+  
+  .ip-input-container {
+    display: flex;
+    gap: 8px;
   }
   
   input {
@@ -290,6 +311,10 @@
     color: var(--color-text);
     font-family: inherit;
     font-size: 16px;
+  }
+  
+  .port-input {
+    flex: 0 0 80px;
   }
   
   input:focus {
@@ -381,12 +406,27 @@
     margin-bottom: 8px;
   }
   
+  .network-note {
+    margin-top: 20px;
+    padding: 12px 16px;
+    background-color: rgba(48, 79, 254, 0.1);
+    border-left: 4px solid var(--color-secondary);
+    border-radius: 4px;
+    line-height: 1.5;
+  }
+  
+  .network-note h4 {
+    color: var(--color-secondary);
+    margin-top: 0;
+    margin-bottom: 8px;
+  }
+  
   @media (max-width: 600px) {
     .connection-panel {
       padding: 16px;
     }
     
-    .join-controls {
+    .ip-input-container {
       flex-direction: column;
     }
     

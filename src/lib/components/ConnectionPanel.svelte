@@ -60,6 +60,16 @@
       - Any firewalls are configured to allow the connection`;
     }
     
+    if (errorMsg.includes('se.get is not a function')) {
+      return `Connection error: Internal networking problem detected.
+      
+      Troubleshooting steps:
+      - Try refreshing both the host and client browsers
+      - Make sure you're using the latest version of your browser
+      - Check that both devices are properly connected to the network
+      - The host may need to restart the hosted game session`;
+    }
+    
     return errorMsg;
   }
   
@@ -78,6 +88,12 @@
     } catch (err) {
       logger.error('network', 'Failed to join game:', err);
       console.error('Failed to join game:', err);
+      
+      // Transform TypeError objects to have a more useful message
+      if (err instanceof TypeError && err.message.includes('is not a function')) {
+        err.message = `Network connection error: ${err.message}. This might be due to a compatibility issue or network configuration problem.`;
+      }
+      
       // Set more detailed error message
       connectionErrorDetails = getConnectionErrorMessage(err);
     } finally {

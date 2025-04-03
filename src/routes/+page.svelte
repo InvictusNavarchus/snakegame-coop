@@ -358,7 +358,8 @@
          </div>
       </div>
     </div>
-  {/if} {#comment} End of gameReady / gameState check {/comment}
+  {/if}
+  <!-- End of gameReady / gameState check -->
 
   <footer>
     <p>Built with SvelteKit | Requires Direct Connection (LAN/VPN)</p>

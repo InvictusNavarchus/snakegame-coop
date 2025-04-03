@@ -43,6 +43,7 @@
     title="Restart Game"
     on:click={handleRestartClick}
     disabled={false}
+  >
     <span class="icon">↻</span>
     <span class="label">Restart</span>
   </button>

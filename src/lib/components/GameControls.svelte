@@ -37,12 +37,12 @@
     <span class="label">{isPaused ? 'Resume' : 'Pause'}</span>
   </button>
 
+  <!-- Restart should always be available -->
   <button
     class="control-button restart"
     title="Restart Game"
     on:click={handleRestartClick}
-    disabled={false} /* Restart should always be available (sends request if client) */
-  >
+    disabled={false}
     <span class="icon">↻</span>
     <span class="label">Restart</span>
   </button>

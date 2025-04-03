@@ -16,9 +16,8 @@
   let connecting = false;
   
   onMount(() => {
-    // Auto-initialize peer on mount
-    logger.info('network', 'ConnectionPanel mounted, auto-initializing peer');
-    handleCreateGame();
+    // Just log when component is mounted, but don't auto-create game
+    logger.info('network', 'ConnectionPanel mounted');
   });
   
   async function handleCreateGame() {
